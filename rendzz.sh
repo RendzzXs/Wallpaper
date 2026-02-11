@@ -1,68 +1,74 @@
 #!/bin/bash
 
-clear
-echo "====================================="
-echo "        RENDZZ OFFICIAL"
-echo "        AUTO INSTALLER"
-echo "====================================="
-echo ""
-read -p "Masukkan Password: " pass
+PTERO_DIR="/var/www/pterodactyl"
+BG_URL="https://files.catbox.moe/z32ox4.jpg"
 
-if [[ "$pass" != "metrickpack2" ]]; then
-    echo "❌ Password Salah!"
-    exit 1
-fi
+echo "🔥 INSTALLING RENDZZ OFFICIAL THEME 🔥"
 
-clear
-echo "====================================="
-echo "        RENDZZ OFFICIAL MENU"
-echo "====================================="
-echo "1. Info System"
-echo "2. Install Package"
-echo "3. Update System"
-echo "4. Install Wallpaper"
-echo "23. Exit"
-echo "====================================="
-read -p "Pilih Menu: " menu
+# 1. Download Background
+mkdir -p $PTERO_DIR/public/rendzz
+curl -L $BG_URL -o $PTERO_DIR/public/rendzz/bg.jpg
 
-if [[ "$menu" == "4" ]]; then
-    read -p "Masukkan Link Wallpaper: " wallpaper
+# 2. Inject CSS Theme
+cat << 'EOF' >> $PTERO_DIR/resources/css/app.css
 
-    if [[ -z "$wallpaper" ]]; then
-        echo "❌ Link tidak boleh kosong!"
-        exit 1
-    fi
+/* =========================
+   RENDZZ OFFICIAL THEME
+========================= */
 
-    echo "📥 Downloading wallpaper..."
-    mkdir -p /root/wallpaper
-    cd /root/wallpaper || exit
+body {
+    background: url('/rendzz/bg.jpg') no-repeat center center fixed;
+    background-size: cover;
+    position: relative;
+}
 
-    curl -L "$wallpaper" -o wallpaper.jpg
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    backdrop-filter: blur(10px);
+    background: rgba(0, 0, 0, 0.75);
+    z-index: -1;
+}
 
-    if [[ ! -f wallpaper.jpg ]]; then
-        echo "❌ Gagal download wallpaper!"
-        exit 1
-    fi
+.bg-neutral-700,
+.bg-neutral-800,
+.bg-neutral-900 {
+    background: rgba(20, 20, 20, 0.80) !important;
+    backdrop-filter: blur(12px);
+    border-radius: 14px;
+}
 
-    echo "🖼️ Setting wallpaper..."
+button,
+.bg-primary-500 {
+    background: #ff0000 !important;
+    border: none !important;
+}
 
-    # Set wallpaper untuk GNOME
-    export DISPLAY=:0
-    export XAUTHORITY=/root/.Xauthority
+button:hover {
+    background: #cc0000 !important;
+}
 
-    gsettings set org.gnome.desktop.background picture-uri "file:///root/wallpaper/wallpaper.jpg"
-    gsettings set org.gnome.desktop.background picture-uri-dark "file:///root/wallpaper/wallpaper.jpg"
+nav {
+    background: rgba(0, 0, 0, 0.85) !important;
+}
 
-    echo "====================================="
-    echo "✅ Wallpaper berhasil dipasang!"
-    echo "     Powered by Rendzz Official"
-    echo "====================================="
-    exit 0
-fi
+h1, h2, h3, h4 {
+    color: #ff2e2e !important;
+}
 
-if [[ "$menu" == "23" ]]; then
-    echo "Keluar..."
-    exit 0
-fi
+EOF
 
-echo "❌ Menu tidak valid!"
+# 3. Replace Footer Text
+find $PTERO_DIR -type f -exec sed -i 's/Pterodactyl/Rendzz Official/g' {} +
+
+# 4. Rebuild Panel
+cd $PTERO_DIR
+npm install
+npm run build
+
+php artisan view:clear
+php artisan cache:clear
+
+echo "✅ RENDZZ OFFICIAL THEME INSTALLED!"
+echo "🚀 Refresh browser (CTRL+SHIFT+R)"
