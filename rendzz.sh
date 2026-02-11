@@ -1,74 +1,75 @@
 #!/bin/bash
 
 PTERO_DIR="/var/www/pterodactyl"
-BG_URL="https://files.catbox.moe/z32ox4.jpg"
 
-echo "🔥 INSTALLING RENDZZ OFFICIAL THEME 🔥"
+echo "🚑 RENDZZ PANEL EMERGENCY REPAIR STARTING..."
 
-# 1. Download Background
-mkdir -p $PTERO_DIR/public/rendzz
-curl -L $BG_URL -o $PTERO_DIR/public/rendzz/bg.jpg
+cd /var/www || exit 1
 
-# 2. Inject CSS Theme
-cat << 'EOF' >> $PTERO_DIR/resources/css/app.css
+# Backup config & env
+echo "📦 Backup .env..."
+cp $PTERO_DIR/.env /root/pterodactyl_env_backup 2>/dev/null
 
-/* =========================
-   RENDZZ OFFICIAL THEME
-========================= */
+# Stop web
+php $PTERO_DIR/artisan down 2>/dev/null
 
-body {
-    background: url('/rendzz/bg.jpg') no-repeat center center fixed;
-    background-size: cover;
-    position: relative;
-}
+# Remove broken core (but keep .env & storage)
+echo "🧹 Cleaning broken core files..."
+cd /var/www
+rm -rf pterodactyl_new
+git clone https://github.com/pterodactyl/panel.git pterodactyl_new
 
-body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    backdrop-filter: blur(10px);
-    background: rgba(0, 0, 0, 0.75);
-    z-index: -1;
-}
+cd pterodactyl_new
 
-.bg-neutral-700,
-.bg-neutral-800,
-.bg-neutral-900 {
-    background: rgba(20, 20, 20, 0.80) !important;
-    backdrop-filter: blur(12px);
-    border-radius: 14px;
-}
+# Install composer deps
+echo "📦 Installing composer..."
+apt update -y
+apt install curl unzip git -y
 
-button,
-.bg-primary-500 {
-    background: #ff0000 !important;
-    border: none !important;
-}
+curl -sS https://getcomposer.org/installer | php
+php composer.phar install --no-dev --optimize-autoloader
 
-button:hover {
-    background: #cc0000 !important;
-}
+# Copy old env
+echo "🔁 Restoring .env..."
+cp /root/pterodactyl_env_backup .env
 
-nav {
-    background: rgba(0, 0, 0, 0.85) !important;
-}
+# Set permissions
+chmod -R 755 storage bootstrap/cache
 
-h1, h2, h3, h4 {
-    color: #ff2e2e !important;
-}
+# Install node if missing
+if ! command -v npm &> /dev/null
+then
+    echo "📦 Installing NodeJS..."
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+    apt install -y nodejs
+fi
 
-EOF
-
-# 3. Replace Footer Text
-find $PTERO_DIR -type f -exec sed -i 's/Pterodactyl/Rendzz Official/g' {} +
-
-# 4. Rebuild Panel
-cd $PTERO_DIR
+# Build assets
+echo "⚙️ Building panel..."
 npm install
 npm run build
 
-php artisan view:clear
-php artisan cache:clear
+# Replace old panel
+echo "🔁 Replacing old panel files..."
+cd /var/www
+rm -rf pterodactyl
+mv pterodactyl_new pterodactyl
 
-echo "✅ RENDZZ OFFICIAL THEME INSTALLED!"
-echo "🚀 Refresh browser (CTRL+SHIFT+R)"
+cd pterodactyl
+
+php artisan key:generate --force
+php artisan migrate --seed --force
+php artisan config:clear
+php artisan cache:clear
+php artisan view:clear
+
+chown -R www-data:www-data /var/www/pterodactyl/*
+
+systemctl restart nginx
+systemctl restart php8.1-fpm 2>/dev/null
+systemctl restart php8.2-fpm 2>/dev/null
+
+php artisan up
+
+echo "✅ PANEL REPAIRED SUCCESSFULLY!"
+echo "🔄 Refresh browser (CTRL+SHIFT+R)"
